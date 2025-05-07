@@ -1,81 +1,57 @@
 import streamlit as st
-import pandas as pd
-from datetime import datetime
 
-# --- Page Setup ---
-st.set_page_config(page_title="Crypto Position Size Calculator", layout="centered")
+# Title
+st.title("📊 Position Size Calculator")
 
-st.markdown("""
-    <style>
-    .main {background-color: #0e1117;}
-    .stApp {color: #f8f9fa;}
-    </style>
-""", unsafe_allow_html=True)
+# --- Input Fields ---
+# Account balance
+account_balance = st.number_input("Account Balance ($)", value=2700.00, min_value=0.0, step=100.0, format="%.2f")
 
-st.title("📈 Crypto Position Size Calculator")
+# Risk per trade
+risk_percent = st.radio(
+    "Risk per Trade (%)",
+    options=[0.5, 1, 1.5, 2, 3, 5],
+    format_func=lambda x: f"{x}%",
+    index=1
+)
 
-# --- Calculator Inputs ---
-balance = st.number_input("💰 Account Balance ($)", min_value=0.0, value=5000.0)
-risk_pct = st.number_input("⚠️ Risk per Trade (%)", min_value=0.0, max_value=100.0, value=2.0)
-entry = st.number_input("🎯 Entry Price ($)", min_value=0.0, value=2000.0)
-stop = st.number_input("🛑 Stop-Loss Price ($)", min_value=0.0, value=1950.0)
-take_profit = st.number_input("🚀 Take-Profit Price ($)", min_value=0.0, value=2100.0)
-leverage = st.slider("🪙 Leverage (optional)", min_value=1, max_value=100, value=1)
+# Calculated risk in dollars
+risk_dollars = (risk_percent / 100) * account_balance
+st.markdown(f"**Risk Amount ($):** ${risk_dollars:,.2f}")
 
-# --- Trade Calculations ---
-if entry > 0 and stop > 0 and stop != entry:
-    risk_amount = balance * (risk_pct / 100)
-    stop_loss_distance = abs(entry - stop)
-    leveraged_risk_amount = risk_amount * leverage
-    position_size = leveraged_risk_amount / stop_loss_distance
+# Stop loss %
+stop_loss_percent = st.number_input("Stop Loss (%)", value=3.00, min_value=0.01, max_value=100.0, step=0.1, format="%.2f")
 
-    # Profit & RRR
-    potential_profit_per_unit = abs(take_profit - entry)
-    total_profit = potential_profit_per_unit * position_size
-    rrr = potential_profit_per_unit / stop_loss_distance if stop_loss_distance > 0 else 0
+# Fees %
+fees_percent = st.number_input("Fees (%)", value=0.10, min_value=0.00, max_value=100.0, step=0.01, format="%.2f")
 
-    st.markdown("### 🧮 Results")
-    st.write(f"**Risk Amount:** ${risk_amount:.2f}")
-    st.write(f"**Leverage Adjusted Risk:** ${leveraged_risk_amount:.2f}")
-    st.write(f"**Stop Loss Distance:** ${stop_loss_distance:.2f}")
-    st.write(f"**Position Size:** {position_size:.6f} units")
-    st.write(f"**Potential Profit:** ${total_profit:.2f}")
-    
-    if rrr > 0:
-        st.write(f"**Risk-to-Reward Ratio:** {rrr:.2f} : 1")
-    else:
-        st.warning("⚠️ Check your entry and take-profit values.")
+# Risk-to-Reward ratio
+rr_ratio = st.number_input("Risk:Reward Ratio", value=2.0, min_value=0.01, step=0.1, format="%.2f")
 
-# --- Trade Journal Section ---
-st.markdown("---")
-st.markdown("## 📝 Trade Journal")
+# Leverage
+leverage = st.radio("Leverage", options=[1, 2, 3, 4, 5, 10], format_func=lambda x: f"{x}x", index=0)
 
-# Initialize session state
-if "journal" not in st.session_state:
-    st.session_state.journal = []
+# --- Calculations ---
+# Effective risk % includes stop loss and fees
+total_risk_percent = stop_loss_percent + fees_percent
+position_size = (risk_dollars / total_risk_percent) * 100  # Calculate position size in $
+adjusted_position_size = position_size / leverage  # Adjust for leverage
 
-with st.form("journal_form"):
-    asset = st.text_input("Asset (e.g. BTC/USDT)")
-    trade_date = st.date_input("Date", datetime.now().date())
-    outcome = st.selectbox("Trade Outcome", ["Win", "Loss", "Breakeven"])
-    notes = st.text_area("Notes")
-    submitted = st.form_submit_button("📌 Save Trade")
+# Calculate profit if TP hit
+reward_percent = stop_loss_percent * rr_ratio
+gross_profit = (position_size * reward_percent) / 100
+net_profit = gross_profit - ((fees_percent / 100) * position_size)
 
-    if submitted:
-        st.session_state.journal.append({
-            "Date": trade_date,
-            "Asset": asset,
-            "Entry": entry,
-            "Stop": stop,
-            "Take-Profit": take_profit,
-            "RRR": round(rrr, 2) if 'rrr' in locals() else None,
-            "Outcome": outcome,
-            "Notes": notes
-        })
-        st.success("Trade saved to journal ✅")
+# --- Output Fields ---
+st.markdown(f"### 🧮 Results")
+st.markdown(f"**Required Position Size:** ${adjusted_position_size:,.2f}")
+st.markdown(f"**Profit if Take-Profit is Hit:** ${net_profit:,.2f} (after fees)")
 
-# Display journal
-if st.session_state.journal:
-    st.markdown("### 📚 Trade History")
-    df = pd.DataFrame(st.session_state.journal)
-    st.dataframe(df, use_container_width=True)
+# Optional: Expand section for explanation
+with st.expander("ℹ️ How calculations work"):
+    st.markdown("""
+    - **Risk Amount ($)** = Account Balance × Risk %
+    - **Position Size** = Risk Amount ÷ (Stop Loss % + Fees %)
+    - **Adjusted Position Size** = Position Size ÷ Leverage
+    - **Profit (TP hit)** = (Position Size × Stop Loss % × R:R) − Fees
+    """)
