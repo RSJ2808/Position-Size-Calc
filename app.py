@@ -5,7 +5,7 @@ st.title("📊 Position Size Calculator")
 
 # --- Input Fields ---
 # Account balance
-account_balance = st.number_input("Account Balance ($)", value=2700.00, min_value=0.0, step=100.0, format="%.2f")
+account_balance = st.number_input("Account Balance ($)", value=4000.00, min_value=0.0, step=100.0, format="%.2f")
 
 # Risk per trade
 risk_percent = st.radio(
